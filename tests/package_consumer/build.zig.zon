@@ -1,0 +1,8 @@
+.{
+    .name = .unitree_consumer_test,
+    .version = "0.0.0",
+    .fingerprint = 0x8d4a8ea63d2aec46, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{ .unitree_sdk2 = .{ .path = "../.." } },
+    .paths = .{ "build.zig", "build.zig.zon", "main.zig" },
+}
