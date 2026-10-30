@@ -28,12 +28,19 @@ zig build run-rpc_loopback -j2
 
 构建时会自动下载固定版本的 SDK 和官方 `translate-c` 包。回环示例在本机运行，无需机器人。
 
-Windows 和 macOS 可通过 `-Dnative=false` 使用数据层，也可提供目标 GNU sysroot 交叉编译 Linux 程序。将本库接入项目的方法见[使用指南](docs/usage.zh-CN.md)。
+Windows 和 macOS 可通过 `-Dnative=false` 使用数据层。仓库已包含固定的 ARM64 GNU 开发文件，可在支持的开发机上直接编译 Ubuntu 20.04 ARM64 产物：
+
+```sh
+zig build examples -Dtarget=aarch64-linux-gnu.2.31 -Doptimize=ReleaseSafe -j2
+```
+
+增加 `-Dlinkage=static -Dcxx-linkage=static` 可静态链接桥接库和 GNU C++；DDS 和 glibc 仍使用动态库。x86_64 交叉编译仍需外部 GNU sysroot。具体接入方法见[使用指南](docs/usage.zh-CN.md)。
 
 ## 文档
 
 - [使用方法与所有权](docs/usage.zh-CN.md)
-- [客户端方法](docs/clients.md) · [DDS 消息](docs/messages.md)
+- [客户端方法](docs/clients.md)
+- [DDS 消息](docs/messages.md)
 - [RPC 与租约](docs/transport.md)
 - [低层工具与调度](docs/utilities.md)
 - [示例与运行命令](examples/README.md)

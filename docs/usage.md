@@ -15,15 +15,32 @@ The call path is Zig → C ABI bridge → official C++ SDK → DDS. Protocol ext
 
 Write application code entirely in Zig and access the library with `@import("unitree_sdk2")`. The official `translate-c` package imports the C headers, while Zig's build API compiles the C++17 bridge and links the SDK. The build downloads pinned versions of [Unitree SDK2](https://github.com/unitreerobotics/unitree_sdk2) and [translate-c](https://codeberg.org/ziglang/translate-c/) automatically. `translate-c` runs only during the build; deployment includes the native libraries described below. No external C++ compiler, CMake, Eigen, or Boost is required.
 
-The native bridge uses GNU C++ headers and runtime libraries to match the official SDK. On native Linux builds these are discovered under `/`; install the distribution's GNU C++ development packages. `-Dgcc-version` selects a specific installed version; otherwise the latest version under `usr/lib/gcc/<triple>/` is selected. Supported layouts use `<arch>-linux-gnu` or `<arch>-pc-linux-gnu` triplets, as on Debian/Ubuntu and Arch Linux.
-
-For cross-compilation, supply a target sysroot containing `usr/include/c++/<version>`, the architecture-specific C++ and libc headers, `libstdc++.so.6`, `libgcc_s.so.1`, and `usr/lib/gcc/<triple>/<version>/{libgcc.a,libgcc_eh.a}`. Use an absolute sysroot path, including when passing it through a package dependency. For an ARM64 robot with glibc 2.31 and GCC 9 runtime files:
+The native bridge uses GNU C++ files to match the official SDK. ARM64 Linux builds use the repository's fixed [GNU development package](../vendor/README.md) by default. It has GCC 9 C++ headers and glibc 2.31 headers. Consumers need no Python setup step. To build for Ubuntu 20.04 ARM64:
 
 ```sh
-zig build -Dtarget=aarch64-linux-gnu.2.31 -Dsysroot=/path/to/arm64-sysroot -Dgcc-version=9 -j2
+zig build examples -Dtarget=aarch64-linux-gnu.2.31 -Doptimize=ReleaseSafe -j2
 ```
 
-This also works from Windows or macOS; the resulting programs run on Linux. In PowerShell, quote each `-D...` argument containing paths or dotted version numbers. The target's glibc version must match the deployment baseline. `-Dbridge=/absolute/path/libunitree_sdk2_zig.so` reuses an existing bridge; compiling the C++ tests still requires the GNU development files.
+The build can run on Windows, macOS, or Linux; its output runs on ARM64 Linux. In PowerShell, quote each `-D...` argument with a path or dotted version. Set the target glibc version to the deployment baseline. Compilation on a host does not test execution on the target.
+
+`-Dsysroot=/absolute/path` overrides the bundled files. Native x86_64 Linux builds use `/` by default. x86_64 cross-builds still require an external sysroot. That sysroot must provide C++ and libc headers, `libstdc++.so.6`, `libgcc_s.so.1`, and `usr/lib/gcc/<triple>/<version>/libgcc.a`. Static C++ builds also need `libstdc++.a`. `-Dgcc-version` selects a version; custom sysroots otherwise use the highest version found. Debian/Ubuntu and Arch Linux directory layouts are supported.
+
+### Linkage
+
+| Option                              | Default   | Result                                                                   |
+| ----------------------------------- | --------- | ------------------------------------------------------------------------ |
+| `-Dlinkage=dynamic` or `static`     | `dynamic` | A shared bridge `.so`, or a static bridge `.a` that contains SDK objects |
+| `-Dcxx-linkage=dynamic` or `static` | `dynamic` | Select `libstdc++.so.6` or `libstdc++.a` for the final link              |
+
+For a static bridge and static GNU C++ library:
+
+```sh
+zig build examples -Dtarget=aarch64-linux-gnu.2.31 -Dlinkage=static -Dcxx-linkage=static -Doptimize=ReleaseSafe -j2
+```
+
+All four option combinations are supported. The Zig module carries the link inputs needed by a static bridge. DDS and glibc remain shared. The build uses shared `libgcc_s` for C++ exception handling. DDS itself still loads `libstdc++.so.6` and `libgcc_s.so.1`, even when the application uses static C++. The target system must provide these shared libraries. This is not a fully static executable.
+
+`-Dbridge=/absolute/path/libunitree_sdk2_zig.so` reuses an existing bridge. For an existing `.a`, also set `-Dlinkage=static`. C++ tests and static consumers still need the GNU development files. Use separate `--prefix` directories when comparing modes; Zig does not remove old installed files when options change.
 
 ## Quick start
 
@@ -76,9 +93,9 @@ exe.root_module.addImport("unitree_sdk2", sdk.module("unitree_sdk2"));
 
 For data-only applications, pass `.native = false` and omit `installRuntime`. A complete consumer project is available in [tests/package_consumer](../tests/package_consumer).
 
-For a cross-compiled dependency, also pass `.sysroot = "/absolute/path/to/sysroot"` and, if needed, `.@"gcc-version" = "9"` in `b.dependency` alongside the same `.target`. The consumer example exposes these as `-Dsysroot` and `-Dgcc-version` options.
+ARM64 dependencies select the bundled package from `.target`. A custom sysroot can be passed as `.sysroot = "/absolute/path/to/sysroot"`, with `.@"gcc-version"` as needed. To select static linkage, pass `.linkage = .static` and `.@"cxx-linkage" = .static`. The consumer example exposes all four options.
 
-Native installations use `bin/`, `lib/`, and `share/licenses/unitree_sdk2/`. Keep these directories together when deploying; executables resolve runtime libraries from `../lib`. The target system supplies the GNU C++ runtime. Custom packaging can use the `bridge` and `dds_runtime` named build outputs.
+Native installations use `bin/`, `lib/`, and `share/licenses/unitree_sdk2/`. Keep these directories together when deploying; executables resolve runtime libraries from `../lib`. `installRuntime` installs DDS and, for a dynamic bridge, the bridge `.so`. Static consumers need no bridge `.so`. The target system supplies the GNU C++ runtime. Custom packaging can use the `bridge`, `dds_runtime`, and `native_runtime` named build outputs.
 
 ## API overview
 

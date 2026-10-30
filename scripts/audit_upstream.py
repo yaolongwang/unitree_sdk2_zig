@@ -37,7 +37,10 @@ def sdk_source(path: Path) -> dict:
         raise ValueError("SDK dependency must pin an official C++ SDK commit")
     dependency["revision"] = revision[1]
     headers = path / "include/unitree"
-    if not (headers / "robot/client/client.hpp").is_file() or not (headers / "idl").is_dir():
+    if (
+        not (headers / "robot/client/client.hpp").is_file()
+        or not (headers / "idl").is_dir()
+    ):
         raise ValueError(f"Invalid C++ SDK directory: {path}")
     fingerprint = hashlib.sha256()
     for header in sorted(headers.rglob("*"), key=lambda p: p.as_posix()):
@@ -69,6 +72,21 @@ def matching_brace(source: str, start: int) -> int:
     raise ValueError("Unbalanced upstream C++ class")
 
 
+def _without_bodies(source: str, sanitized: str) -> str:
+    """Keep declarations and replace inline bodies with spaces."""
+    flat = []
+    index = 0
+    while index < len(source):
+        if sanitized[index] == "{":
+            end = matching_brace(sanitized, index)
+            flat.append(";" + " " * (end - index))
+            index = end + 1
+        else:
+            flat.append(source[index])
+            index += 1
+    return "".join(flat)
+
+
 def cpp_clients(root: Path) -> list[dict]:
     clients = []
     robot_root = root / "include/unitree/robot"
@@ -84,18 +102,7 @@ def cpp_clients(root: Path) -> list[dict]:
             name = match.group(1)
             start = match.end()
             body = clean[start : matching_brace(clean, start - 1)]
-            # Remove inline bodies so local expressions cannot masquerade as methods.
-            flat = []
-            index = 0
-            while index < len(body):
-                if body[index] == "{":
-                    end = matching_brace(body, index)
-                    flat.append(";" + " " * (end - index))
-                    index = end + 1
-                else:
-                    flat.append(body[index])
-                    index += 1
-            body = "".join(flat)
+            body = _without_bodies(body, body)
             access = "private"
             methods = []
             namespace = "/".join(relative.parts[:-1])
@@ -131,7 +138,7 @@ def cpp_clients(root: Path) -> list[dict]:
                 {
                     "namespace": namespace,
                     "class": name,
-                    "source": str(path.relative_to(root)).replace("\\", "/"),
+                    "source": path.relative_to(root).as_posix(),
                     "methods": methods,
                 }
             )
@@ -149,7 +156,7 @@ def messages(cpp: Path) -> dict:
         match = re.search(r'return\s+"([\w:]+_)"', source)
         if match:
             name = match.group(1).replace("::", ".")
-            cpp_types[name] = str(path.relative_to(cpp)).replace("\\", "/")
+            cpp_types[name] = path.relative_to(cpp).as_posix()
     return cpp_types
 
 
@@ -252,21 +259,10 @@ def wrapper_surface(cpp: Path) -> list[dict]:
                 source[cls.end() : end],
                 flags=re.S,
             )
-            flat = []
-            index = 0
-            while index < len(body):
-                if clean_body[index] == "{":
-                    end = matching_brace(clean_body, index)
-                    flat.append(";" + " " * (end - index))
-                    index = end + 1
-                else:
-                    flat.append(body[index])
-                    index += 1
+            body = _without_bodies(body, clean_body)
             access = "private"
             members = []
-            for fragment in re.split(
-                r"(;|\b(?:public|private|protected)\s*:)", "".join(flat)
-            ):
+            for fragment in re.split(r"(;|\b(?:public|private|protected)\s*:)", body):
                 access_match = re.fullmatch(r"(public|private|protected)\s*:", fragment)
                 if access_match:
                     access = access_match.group(1)
@@ -321,7 +317,9 @@ def inventory(cpp: Path) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--sdk", type=Path, required=True, help="SDK directory resolved by Zig")
+    parser.add_argument(
+        "--sdk", type=Path, required=True, help="SDK directory resolved by Zig"
+    )
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--check", type=Path, metavar="MANIFEST")
     args = parser.parse_args()
@@ -336,7 +334,10 @@ def main() -> int:
         }
         differences = {}
         if manifest.get("sdk") != result["sdk"]:
-            differences["sdk"] = {"expected": result["sdk"], "recorded": manifest.get("sdk")}
+            differences["sdk"] = {
+                "expected": result["sdk"],
+                "recorded": manifest.get("sdk"),
+            }
         for key, values in expected.items():
             actual = {
                 row if isinstance(row, str) else row["upstream"]

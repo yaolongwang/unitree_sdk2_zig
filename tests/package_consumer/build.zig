@@ -6,12 +6,16 @@ pub fn build(b: *std.Build) void {
     const native = b.option(bool, "native", "Use the native SDK bridge") orelse (target.result.os.tag == .linux);
     const sysroot = b.option([]const u8, "sysroot", "Target GNU sysroot");
     const gcc_version = b.option([]const u8, "gcc-version", "GNU C++ header/runtime version");
+    const linkage = b.option(std.builtin.LinkMode, "linkage", "Bridge linkage") orelse .dynamic;
+    const cxx_linkage = b.option(std.builtin.LinkMode, "cxx-linkage", "GNU C++ linkage") orelse .dynamic;
     const sdk = b.dependency("unitree_sdk2", .{
         .target = target,
         .optimize = optimize,
         .native = native,
         .sysroot = sysroot,
         .@"gcc-version" = gcc_version,
+        .linkage = linkage,
+        .@"cxx-linkage" = cxx_linkage,
     });
     const executable = b.addExecutable(.{
         .name = "unitree_consumer",

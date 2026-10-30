@@ -17,6 +17,7 @@ from pathlib import Path
 import audit_upstream as audit
 import generate_clients as clients_generator
 import generate_messages as messages_generator
+from generated_files import check_or_write
 
 ROOT = Path(__file__).resolve().parents[1]
 # Convenience routes are checked separately from official SDK methods.
@@ -320,11 +321,13 @@ def check_clients(
         if target.get("origin") != "protocol_extension":
             continue
         adapter = checks.implementation(target["native_source"], name)
-        extensions.append({
-            **target,
-            "method": name,
-            "native_adapter_sha256": digest(compact(adapter)),
-        })
+        extensions.append(
+            {
+                **target,
+                "method": name,
+                "native_adapter_sha256": digest(compact(adapter)),
+            }
+        )
     # Verify the supplemental request bodies, registrations and preset lookup.
     for (robot, service), expected in clients_generator.PROTOCOL_EXTENSIONS.items():
         relative = f"src/cpp/generated/clients_{robot}_{service}.cpp"
@@ -348,22 +351,30 @@ def check_clients(
         except ValueError as exc:
             checks.errors.append(str(exc))
         client = by_namespace[namespace]
-        aliases.append({
-            "zig": f"clients.{client['robot']}.{client['cls']}.{binding}",
-            "route": route,
-            "behavior": note,
-        })
+        aliases.append(
+            {
+                "zig": f"clients.{client['robot']}.{client['cls']}.{binding}",
+                "route": route,
+                "behavior": note,
+            }
+        )
     for namespace, declaration, target in (
         ("b2", "pub const VuiClient = go2.VuiClient;", "go2.VuiClient"),
-        (None, "pub const MotionSwitcherClient = b2.MotionSwitcherClient;", "b2.MotionSwitcherClient"),
+        (
+            None,
+            "pub const MotionSwitcherClient = b2.MotionSwitcherClient;",
+            "b2.MotionSwitcherClient",
+        ),
     ):
         body = scope(zig_source, namespace) if namespace else zig_source
         checks.require(declaration in body, f"Missing client alias: {declaration}")
         name = declaration.split()[2]
-        aliases.append({
-            "zig": "clients." + (namespace + "." if namespace else "") + name,
-            "route": "clients." + target,
-        })
+        aliases.append(
+            {
+                "zig": "clients." + (namespace + "." if namespace else "") + name,
+                "route": "clients." + target,
+            }
+        )
     return records, extensions, aliases
 
 
@@ -443,19 +454,26 @@ def check_constants(checks: Checks, upstream: dict) -> dict:
         )
         records.append({**constant, "zig": "constants." + ".".join(names + [name])})
     variants = []
-    for robot, services in clients_generator.protocol_metadata()["protocol_variants"].items():
+    for robot, services in clients_generator.protocol_metadata()[
+        "protocol_variants"
+    ].items():
         for service, constants in services.items():
             names = ["protocol_variants", robot, service]
             for name, expected in constants.items():
                 binding = clients_generator.snake(name)
                 value = zig_literal(checks, "src/constants.zig", names, binding)
-                checks.require(value == expected, f"Protocol constant changed: {robot}/{service}/{name}")
-                variants.append({
-                    "source": "scripts/protocol_extensions.json",
-                    "name": name,
-                    "value": expected,
-                    "zig": "constants." + ".".join(names + [binding]),
-                })
+                checks.require(
+                    value == expected,
+                    f"Protocol constant changed: {robot}/{service}/{name}",
+                )
+                variants.append(
+                    {
+                        "source": "scripts/protocol_extensions.json",
+                        "name": name,
+                        "value": expected,
+                        "zig": "constants." + ".".join(names + [binding]),
+                    }
+                )
     return {"cpp": records, "protocol_variants": variants}
 
 
@@ -470,9 +488,7 @@ def enum_values(source: str, name: str) -> dict[str, int]:
     return result
 
 
-def check_helpers(
-    checks: Checks, upstream: dict, cpp_root: Path
-) -> dict:
+def check_helpers(checks: Checks, upstream: dict, cpp_root: Path) -> dict:
     robots = checks.read("src/robots.zig")
     remote = checks.read("src/remote_control.zig")
     constants = checks.read("src/constants.zig")
@@ -730,7 +746,11 @@ def check_helpers(
         actual == expected, "G1 preset action map differs from its reference"
     )
     actions.append(
-        {"origin": "protocol_extension", "zig": "constants.g1.arm.preset_actions", "values": actual}
+        {
+            "origin": "protocol_extension",
+            "zig": "constants.g1.arm.preset_actions",
+            "values": actual,
+        }
     )
     # These helpers are free functions duplicated for G1/H2 upstream.
     terminations = []
@@ -920,50 +940,94 @@ def check_helpers(
 def check_zig_utilities(checks: Checks) -> list[dict]:
     # These are the library's own public utilities, not external language APIs.
     specifications = [
-        ("sync", "BoundedQueue", "init put get size interrupt close clear deinit",
-         "Accepted items transfer ownership; replacement returns the displaced item. Clear requires a disposal callback."),
-        ("sync", "Future", "init ready fail wait getResult close deinit",
-         "Single completion; repeated reads share shallow values. Failure text is owned by the Future."),
-        ("remote_control", "ButtonState", "update resetClickCount",
-         "Explicit monotonic timestamp, 300 ms click window, first click count zero."),
-        ("remote_control", "AxisState", "update",
-         "Absolute-value threshold and strict previous-sample edge comparisons."),
-        ("remote_control", "RemoteTracker", "init button extract extractPacket resetAllClickCounts combine",
-         "Four axes and 14 active buttons; 500 ms idle click reset. F1/F2 are excluded."),
-        ("scheduling", "FrequencySampler", "init sample take reset",
-         "Atomic sample count; caller supplies timestamps and receives a rate."),
-        ("scheduling", "PeriodicTask", "init start stop stats deinit",
-         "Explicit start/stop/join and callback error statistics. Zero interval runs a cooperative continuous loop."),
-        ("crc", None, "crc16 fromWords fromBytes encodedSize encode compute update verify",
-         "Stateless field-wise checksums for four low-level message layouts, plus CRC16."),
+        (
+            "sync",
+            "BoundedQueue",
+            "init put get size interrupt close clear deinit",
+            "Accepted items transfer ownership; replacement returns the displaced item. Clear requires a disposal callback.",
+        ),
+        (
+            "sync",
+            "Future",
+            "init ready fail wait getResult close deinit",
+            "Single completion; repeated reads share shallow values. Failure text is owned by the Future.",
+        ),
+        (
+            "remote_control",
+            "ButtonState",
+            "update resetClickCount",
+            "Explicit monotonic timestamp, 300 ms click window, first click count zero.",
+        ),
+        (
+            "remote_control",
+            "AxisState",
+            "update",
+            "Absolute-value threshold and strict previous-sample edge comparisons.",
+        ),
+        (
+            "remote_control",
+            "RemoteTracker",
+            "init button extract extractPacket resetAllClickCounts combine",
+            "Four axes and 14 active buttons; 500 ms idle click reset. F1/F2 are excluded.",
+        ),
+        (
+            "scheduling",
+            "FrequencySampler",
+            "init sample take reset",
+            "Atomic sample count; caller supplies timestamps and receives a rate.",
+        ),
+        (
+            "scheduling",
+            "PeriodicTask",
+            "init start stop stats deinit",
+            "Explicit start/stop/join and callback error statistics. Zero interval runs a cooperative continuous loop.",
+        ),
+        (
+            "crc",
+            None,
+            "crc16 fromWords fromBytes encodedSize encode compute update verify",
+            "Stateless field-wise checksums for four low-level message layouts, plus CRC16.",
+        ),
     ]
     records = []
     for module, container, names, behavior in specifications:
         source = checks.read(f"src/{module}.zig")
-        body = source if container is None else (
-            function(source, container, zig=True) if module == "sync" else scope(source, container)
-        )
+        if container is None:
+            body = source
+        elif module == "sync":
+            body = function(source, container, zig=True)
+        else:
+            body = scope(source, container)
         expected = set(names.split())
         actual = set(re.findall(r"\bpub\s+fn\s+(\w+)\s*\(", clean(body)))
         if module == "sync":
             actual.discard(container)  # The generic factory encloses its methods.
-        checks.require(actual == expected, f"Zig utility method inventory changed: {module}.{container}")
+        checks.require(
+            actual == expected,
+            f"Zig utility method inventory changed: {module}.{container}",
+        )
         methods = []
         for name in names.split():
             implementation = function(body, name, zig=True)
             methods.append({"name": name, "sha256": digest(compact(implementation))})
-        records.append({
-            "zig": module + ("." + container if container else ""),
-            "source": f"src/{module}.zig",
-            "methods": methods,
-            "behavior": behavior,
-        })
+        records.append(
+            {
+                "zig": module + ("." + container if container else ""),
+                "source": f"src/{module}.zig",
+                "methods": methods,
+                "behavior": behavior,
+            }
+        )
     remote = checks.read("src/remote_control.zig")
     button = compact(scope(remote, "ButtonState"))
     tracker = compact(scope(remote, "RemoteTracker"))
-    checks.require("click_interval_ns:i64=300_000_000" in button, "ButtonState click window changed")
     checks.require(
-        "inactive_timeout_ns:i64=500_000_000" in tracker and "self.resetAllClickCounts();" in tracker,
+        "click_interval_ns:i64=300_000_000" in button,
+        "ButtonState click window changed",
+    )
+    checks.require(
+        "inactive_timeout_ns:i64=500_000_000" in tracker
+        and "self.resetAllClickCounts();" in tracker,
         "RemoteTracker idle click reset is missing",
     )
     return records
@@ -971,7 +1035,9 @@ def check_zig_utilities(checks: Checks) -> list[dict]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--sdk", type=Path, required=True, help="SDK directory resolved by Zig")
+    parser.add_argument(
+        "--sdk", type=Path, required=True, help="SDK directory resolved by Zig"
+    )
     parser.add_argument(
         "--report", type=Path, default=ROOT / "tests/reference/coverage.json"
     )
@@ -994,7 +1060,8 @@ def main() -> int:
         "sdk": upstream["sdk"],
         "counts": {
             "cpp_clients": len(upstream["cpp_clients"]),
-            "cpp_methods_excluding_init": len(cpp_methods) - len(upstream["cpp_clients"]),
+            "cpp_methods_excluding_init": len(cpp_methods)
+            - len(upstream["cpp_clients"]),
             "cpp_methods_with_init_and_overloads": len(cpp_methods),
             "protocol_extension_methods": len(extensions),
             "convenience_aliases": len(aliases),
@@ -1020,10 +1087,7 @@ def main() -> int:
         )
         return 1
     encoded = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
-    if args.write:
-        args.report.parent.mkdir(parents=True, exist_ok=True)
-        args.report.write_text(encoded, encoding="utf-8", newline="\n")
-    elif not args.report.exists() or args.report.read_text(encoding="utf-8") != encoded:
+    if not check_or_write(args.report, encoded, check=not args.write, kind="json"):
         print(
             "Coverage evidence is stale; review changes and run zig build regenerate -Dsdk-tools",
             file=sys.stderr,

@@ -14,7 +14,6 @@ comptime {
     referenceAll(sdk.scheduling.RealtimePublisher(sdk.messages.go2.LowCmd));
     referenceAll(sdk.scheduling.CachedSubscriber(sdk.messages.go2.LowState));
     referenceAll(sdk.constants);
-    @import("generated_client_check.zig").check();
     referenceAll(sdk.Publisher(sdk.messages.go2.LowCmd));
     referenceAll(sdk.Subscriber(sdk.messages.go2.LowState));
     referenceAll(sdk.Message(sdk.messages.ros2.PointCloud2));

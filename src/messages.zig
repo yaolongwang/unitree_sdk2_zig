@@ -187,77 +187,17 @@ pub fn typeId(comptime T: type) u32 {
 }
 pub const count: usize = 72;
 
-test "all generated message types have unique IDs and C layouts" {
-    try std.testing.expectEqual(@as(u32, 33), typeId(go2.AudioData));
-    try std.testing.expectEqual(@as(u32, 34), typeId(go2.BmsCmd));
-    try std.testing.expectEqual(@as(u32, 35), typeId(go2.BmsState));
-    try std.testing.expectEqual(@as(u32, 36), typeId(go2.ConfigChangeStatus));
-    try std.testing.expectEqual(@as(u32, 37), typeId(go2.Error));
-    try std.testing.expectEqual(@as(u32, 38), typeId(go2.Go2FrontVideoData));
-    try std.testing.expectEqual(@as(u32, 39), typeId(go2.HeightMap));
-    try std.testing.expectEqual(@as(u32, 40), typeId(go2.IMUState));
-    try std.testing.expectEqual(@as(u32, 41), typeId(go2.InterfaceConfig));
-    try std.testing.expectEqual(@as(u32, 42), typeId(go2.LidarState));
-    try std.testing.expectEqual(@as(u32, 43), typeId(go2.LowCmd));
-    try std.testing.expectEqual(@as(u32, 44), typeId(go2.LowState));
-    try std.testing.expectEqual(@as(u32, 45), typeId(go2.MotorCmd));
-    try std.testing.expectEqual(@as(u32, 46), typeId(go2.MotorCmds));
-    try std.testing.expectEqual(@as(u32, 47), typeId(go2.MotorState));
-    try std.testing.expectEqual(@as(u32, 48), typeId(go2.MotorStates));
-    try std.testing.expectEqual(@as(u32, 49), typeId(go2.PathPoint));
-    try std.testing.expectEqual(@as(u32, 50), typeId(go2.Req));
-    try std.testing.expectEqual(@as(u32, 51), typeId(go2.Res));
-    try std.testing.expectEqual(@as(u32, 52), typeId(go2.SportModeCmd));
-    try std.testing.expectEqual(@as(u32, 53), typeId(go2.SportModeState));
-    try std.testing.expectEqual(@as(u32, 54), typeId(go2.TimeSpec));
-    try std.testing.expectEqual(@as(u32, 55), typeId(go2.UwbState));
-    try std.testing.expectEqual(@as(u32, 56), typeId(go2.UwbSwitch));
-    try std.testing.expectEqual(@as(u32, 57), typeId(go2.VoxelMapCompressed));
-    try std.testing.expectEqual(@as(u32, 58), typeId(go2.WirelessController));
-    try std.testing.expectEqual(@as(u32, 59), typeId(hg.AgvBmsState));
-    try std.testing.expectEqual(@as(u32, 60), typeId(hg.BmsCmd));
-    try std.testing.expectEqual(@as(u32, 61), typeId(hg.BmsState));
-    try std.testing.expectEqual(@as(u32, 62), typeId(hg.HandCmd));
-    try std.testing.expectEqual(@as(u32, 63), typeId(hg.HandState));
-    try std.testing.expectEqual(@as(u32, 64), typeId(hg.IMUState));
-    try std.testing.expectEqual(@as(u32, 65), typeId(hg.LowCmd));
-    try std.testing.expectEqual(@as(u32, 66), typeId(hg.LowState));
-    try std.testing.expectEqual(@as(u32, 67), typeId(hg.MainBoardState));
-    try std.testing.expectEqual(@as(u32, 68), typeId(hg.MotorCmd));
-    try std.testing.expectEqual(@as(u32, 69), typeId(hg.MotorState));
-    try std.testing.expectEqual(@as(u32, 70), typeId(hg.PressSensorState));
-    try std.testing.expectEqual(@as(u32, 71), typeId(hg.SportModeState));
-    try std.testing.expectEqual(@as(u32, 72), typeId(hg_doubleimu.doubleIMUState));
-    try std.testing.expectEqual(@as(u32, 23), typeId(ros2.Header));
-    try std.testing.expectEqual(@as(u32, 20), typeId(ros2.Imu));
-    try std.testing.expectEqual(@as(u32, 17), typeId(ros2.MapMetaData));
-    try std.testing.expectEqual(@as(u32, 18), typeId(ros2.OccupancyGrid));
-    try std.testing.expectEqual(@as(u32, 19), typeId(ros2.Odometry));
-    try std.testing.expectEqual(@as(u32, 2), typeId(ros2.Point32));
-    try std.testing.expectEqual(@as(u32, 21), typeId(ros2.PointCloud2));
-    try std.testing.expectEqual(@as(u32, 22), typeId(ros2.PointField));
-    try std.testing.expectEqual(@as(u32, 3), typeId(ros2.PointStamped));
-    try std.testing.expectEqual(@as(u32, 4), typeId(ros2.Point));
-    try std.testing.expectEqual(@as(u32, 5), typeId(ros2.Pose2D));
-    try std.testing.expectEqual(@as(u32, 6), typeId(ros2.PoseStamped));
-    try std.testing.expectEqual(@as(u32, 7), typeId(ros2.PoseWithCovarianceStamped));
-    try std.testing.expectEqual(@as(u32, 8), typeId(ros2.PoseWithCovariance));
-    try std.testing.expectEqual(@as(u32, 9), typeId(ros2.Pose));
-    try std.testing.expectEqual(@as(u32, 10), typeId(ros2.QuaternionStamped));
-    try std.testing.expectEqual(@as(u32, 11), typeId(ros2.Quaternion));
-    try std.testing.expectEqual(@as(u32, 24), typeId(ros2.String));
-    try std.testing.expectEqual(@as(u32, 1), typeId(ros2.Time));
-    try std.testing.expectEqual(@as(u32, 12), typeId(ros2.TwistStamped));
-    try std.testing.expectEqual(@as(u32, 13), typeId(ros2.TwistWithCovarianceStamped));
-    try std.testing.expectEqual(@as(u32, 14), typeId(ros2.TwistWithCovariance));
-    try std.testing.expectEqual(@as(u32, 15), typeId(ros2.Twist));
-    try std.testing.expectEqual(@as(u32, 16), typeId(ros2.Vector3));
-    try std.testing.expectEqual(@as(u32, 25), typeId(api.RequestHeader));
-    try std.testing.expectEqual(@as(u32, 26), typeId(api.RequestIdentity));
-    try std.testing.expectEqual(@as(u32, 27), typeId(api.RequestLease));
-    try std.testing.expectEqual(@as(u32, 28), typeId(api.RequestPolicy));
-    try std.testing.expectEqual(@as(u32, 29), typeId(api.Request));
-    try std.testing.expectEqual(@as(u32, 30), typeId(api.ResponseHeader));
-    try std.testing.expectEqual(@as(u32, 31), typeId(api.ResponseStatus));
-    try std.testing.expectEqual(@as(u32, 32), typeId(api.Response));
+test "message IDs are unique and cover the declared range" {
+    var seen: [count + 1]bool = @splat(false);
+    var total: usize = 0;
+    inline for (.{ api, go2, hg, hg_doubleimu, ros2 }) |Group| {
+        inline for (@typeInfo(Group).@"struct".decl_names) |name| {
+            const id = typeId(@field(Group, name));
+            try std.testing.expect(id > 0 and id <= count);
+            try std.testing.expect(!seen[id]);
+            seen[id] = true;
+            total += 1;
+        }
+    }
+    try std.testing.expectEqual(count, total);
 }

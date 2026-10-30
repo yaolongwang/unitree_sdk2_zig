@@ -11,6 +11,8 @@ pub fn main() !void {
         defer buffer.deinit();
         std.debug.assert(std.mem.eql(u8, buffer.slice(), "downstream package"));
         std.debug.assert(sdk.raw.usdk_abi_version() == 1);
+        // This path throws and catches a C++ exception before DDS is initialized.
+        try std.testing.expectError(error.InvalidArgument, sdk.Client.init("consumer", "1.0.0", false));
     }
-    std.debug.print("Downstream package import, runtime and CRC passed\n", .{});
+    std.debug.print("Downstream package import, runtime, exceptions and CRC passed\n", .{});
 }

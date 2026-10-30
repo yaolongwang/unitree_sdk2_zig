@@ -12,11 +12,15 @@ jobs:
         include:
           - runner: ubuntu-24.04
             arch: x86_64
+            gnu_options: -Dgcc-version=13
             sha256: 1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026
           - runner: ubuntu-24.04-arm
             arch: aarch64
+            gnu_options: -Dtarget=aarch64-linux-gnu.2.31
             sha256: 9e8d11661d4ae3bd57702a3832781e23ad151dde5798e16a5ccd503f65234ff8
     runs-on: ${{ matrix.runner }}
+    env:
+      GNU_OPTIONS: ${{ matrix.gnu_options }}
     steps:
       - uses: actions/checkout@v4
       - name: Install fixed Zig toolchain
@@ -29,6 +33,7 @@ jobs:
           tar -xf "$RUNNER_TEMP/zig.tar.xz" -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/zig-${ZIG_ARCH}-linux-0.17.0" >> "$GITHUB_PATH"
       - name: Install GNU C++ headers and runtime files
+        if: matrix.arch == 'x86_64'
         run: |
           sudo apt-get update
           sudo apt-get install -y libstdc++-13-dev
@@ -38,19 +43,24 @@ jobs:
           zig fmt --check build.zig build.zig.zon src tests examples scripts
       - name: Build and test
         run: |
-          zig build test check examples -Dgcc-version=13 -j2
-          zig build test-native -Dgcc-version=13 -j2
-          zig build run-rpc_loopback -Dgcc-version=13 -j2
+          zig build test check examples $GNU_OPTIONS -j2
+          zig build test-native $GNU_OPTIONS -j2
+          zig build run-rpc_loopback $GNU_OPTIONS -j2
+      - name: Test static bridge and GNU C++ linkage
+        run: zig build test-native $GNU_OPTIONS -Dlinkage=static -Dcxx-linkage=static -j2
       - name: Test package consumption and installation
         working-directory: tests/package_consumer
         run: |
-          zig build -Dgcc-version=13 -j2
+          zig build $GNU_OPTIONS -j2
           zig-out/bin/unitree_consumer
           runtime_deps=$(ldd zig-out/bin/unitree_consumer)
           for library in libunitree_sdk2_zig.so libddsc.so.0 libddscxx.so.0; do
             resolved=$(printf '%s\n' "$runtime_deps" | awk -v name="$library" '$1 == name { print $3 }')
             test "$(realpath "$resolved")" = "$(realpath "zig-out/lib/$library")"
           done
+          zig build $GNU_OPTIONS -Dlinkage=static -Dcxx-linkage=static --prefix zig-out/static -j2
+          zig-out/static/bin/unitree_consumer
+          test ! -e zig-out/static/lib/libunitree_sdk2_zig.so
 
   windows-data:
     runs-on: windows-latest
@@ -71,3 +81,10 @@ jobs:
       - name: Test data-only package consumption
         working-directory: tests/package_consumer
         run: zig build run
+      - name: Cross-compile ARM64 package consumers
+        working-directory: tests/package_consumer
+        shell: pwsh
+        run: |
+          zig build '-Dtarget=aarch64-linux-gnu.2.31' -Doptimize=ReleaseSafe --prefix zig-out/arm64-dynamic -j2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          zig build '-Dtarget=aarch64-linux-gnu.2.31' -Doptimize=ReleaseSafe -Dlinkage=static -Dcxx-linkage=static --prefix zig-out/arm64-static -j2

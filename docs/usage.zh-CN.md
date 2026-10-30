@@ -15,15 +15,32 @@
 
 应用代码完全使用 Zig，通过 `@import("unitree_sdk2")` 调用本库。官方 `translate-c` 包负责导入 C 头文件，Zig 构建 API 负责编译 C++17 桥接并链接 SDK。构建过程会自动下载固定版本的 [Unitree SDK2](https://github.com/unitreerobotics/unitree_sdk2) 和 [translate-c](https://codeberg.org/ziglang/translate-c/)。`translate-c` 只在构建期运行，部署所需的原生运行库见下文；构建不依赖外部 C++ 编译器、CMake、Eigen 或 Boost。
 
-原生桥接使用 GNU C++ 头文件和运行库，以匹配官方 SDK。本机 Linux 构建默认从 `/` 查找，需安装发行版的 GNU C++ 开发包。`-Dgcc-version` 可选择具体版本；默认选择 `usr/lib/gcc/<triple>/` 下最新的版本。支持 Debian/Ubuntu 和 Arch Linux 常用的 `<arch>-linux-gnu`、`<arch>-pc-linux-gnu` 目录布局。
-
-交叉编译时，提供包含 `usr/include/c++/<版本>`、架构专属 C++ 和 libc 头文件、`libstdc++.so.6`、`libgcc_s.so.1`，以及 `usr/lib/gcc/<triple>/<版本>/{libgcc.a,libgcc_eh.a}` 的目标 sysroot。sysroot 使用绝对路径，作为包依赖传入时也一样。例如目标机器人为 ARM64、glibc 2.31，并使用 GCC 9 运行库文件：
+原生桥接使用 GNU C++ 开发文件，以匹配官方 SDK。ARM64 Linux 构建默认使用仓库内固定的 [GNU 开发文件包](../vendor/README.md)，其中包含 GCC 9 C++ 头文件和 glibc 2.31 头文件。使用者不需要执行 Python 准备步骤。编译 Ubuntu 20.04 ARM64 产物：
 
 ```sh
-zig build -Dtarget=aarch64-linux-gnu.2.31 -Dsysroot=/path/to/arm64-sysroot -Dgcc-version=9 -j2
+zig build examples -Dtarget=aarch64-linux-gnu.2.31 -Doptimize=ReleaseSafe -j2
 ```
 
-该命令也可在 Windows 或 macOS 上执行，生成的程序在 Linux 上运行。在 PowerShell 中，应给含路径或带点版本号的 `-D...` 参数加引号。目标 glibc 版本应匹配部署环境的基线。`-Dbridge=/绝对路径/libunitree_sdk2_zig.so` 可复用已有桥接库；编译 C++ 测试仍需要 GNU 开发文件。
+该命令可在 Windows、macOS 或 Linux 上执行，生成的程序在 ARM64 Linux 上运行。在 PowerShell 中，应给含路径或带点版本号的 `-D...` 参数加引号。目标 glibc 版本应匹配部署基线。开发机上编译成功不能代替目标系统上的运行测试。
+
+`-Dsysroot=/绝对路径` 可覆盖内置文件。本机 x86_64 Linux 默认使用 `/`；x86_64 交叉编译仍需外部 sysroot。外部目录应包含 C++、libc 头文件、`libstdc++.so.6`、`libgcc_s.so.1` 和 `usr/lib/gcc/<triple>/<版本>/libgcc.a`。静态 C++ 链接还需要 `libstdc++.a`。`-Dgcc-version` 可指定版本；自定义 sysroot 默认选择找到的最高版本。支持 Debian/Ubuntu 和 Arch Linux 的常用目录布局。
+
+### 链接方式
+
+| 参数                                | 默认值    | 作用                                               |
+| ----------------------------------- | --------- | -------------------------------------------------- |
+| `-Dlinkage=dynamic` 或 `static`     | `dynamic` | 生成桥接动态库 `.so`，或包含 SDK 对象的静态库 `.a` |
+| `-Dcxx-linkage=dynamic` 或 `static` | `dynamic` | 最终链接选择 `libstdc++.so.6` 或 `libstdc++.a`     |
+
+静态链接桥接库和 GNU C++：
+
+```sh
+zig build examples -Dtarget=aarch64-linux-gnu.2.31 -Dlinkage=static -Dcxx-linkage=static -Doptimize=ReleaseSafe -j2
+```
+
+两组选项可以独立组合。Zig 模块会传递静态桥接需要的链接输入。DDS 和 glibc 保持动态链接；C++ 异常处理使用共享 `libgcc_s`。即使应用静态链接 GNU C++，DDS 自身仍会加载 `libstdc++.so.6` 和 `libgcc_s.so.1`，目标系统需要提供它们。这不是完全静态可执行程序。
+
+`-Dbridge=/绝对路径/libunitree_sdk2_zig.so` 可复用已有桥接库。使用已有 `.a` 时，同时指定 `-Dlinkage=static`。C++ 测试和静态消费者仍需 GNU 开发文件。比较不同模式时使用独立的 `--prefix` 目录；Zig 不会因选项改变而删除旧的安装文件。
 
 ## 快速开始
 
@@ -76,9 +93,9 @@ exe.root_module.addImport("unitree_sdk2", sdk.module("unitree_sdk2"));
 
 纯数据层应用应传入 `.native = false`，并省略 `installRuntime`。完整的依赖使用示例见 [tests/package_consumer](../tests/package_consumer)。
 
-交叉编译依赖时，在 `b.dependency` 中随相同的 `.target` 传入 `.sysroot = "/目标/sysroot/绝对路径"`，并按需传入 `.@"gcc-version" = "9"`。下游示例已提供对应的 `-Dsysroot` 和 `-Dgcc-version` 选项。
+ARM64 依赖根据 `.target` 自动选择内置资源包。需要覆盖时，传入 `.sysroot = "/目标/sysroot/绝对路径"`，并按需传入 `.@"gcc-version"`。静态模式传入 `.linkage = .static` 和 `.@"cxx-linkage" = .static`。下游示例已提供对应选项。
 
-原生安装包含 `bin/`、`lib/` 和 `share/licenses/unitree_sdk2/`。部署时保留这些目录的相对位置；可执行文件从 `../lib` 查找运行库。GNU C++ 运行库由目标系统提供。自定义打包可以使用 `bridge` 和 `dds_runtime` 命名构建输出。
+原生安装包含 `bin/`、`lib/` 和 `share/licenses/unitree_sdk2/`。部署时保留这些目录的相对位置；可执行文件从 `../lib` 查找运行库。`installRuntime` 安装 DDS，并在动态桥接模式下安装桥接 `.so`；静态消费者不需要桥接 `.so`。GNU C++ 运行库由目标系统提供。自定义打包可以使用 `bridge`、`dds_runtime` 和 `native_runtime` 命名构建输出。
 
 ## API 概览
 
